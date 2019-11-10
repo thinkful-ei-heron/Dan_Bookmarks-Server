@@ -22,11 +22,11 @@ describe('Bookmarks Endpoints', () => {
 
   afterEach('empty bookmarks', () => db('bookmarks').truncate());
 
-  describe('GET /bookmarks', () => {
+  describe('GET /api/bookmarks', () => {
     context(`Given bookmarks table has no data`, () => {
       it(`responds with 200 and an empty list`, () => {
         return supertest(app)
-          .get('/bookmarks')
+          .get('/api/bookmarks')
           .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
           .expect(200, []);
       });
@@ -41,7 +41,7 @@ describe('Bookmarks Endpoints', () => {
 
       it('Responds with all bookmarks from the bookmarks table', () => {
         return supertest(app)
-          .get('/bookmarks')
+          .get('/api/bookmarks')
           .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
           .expect(200, testBookmarks);
       });
@@ -50,14 +50,29 @@ describe('Bookmarks Endpoints', () => {
         const bookmarkId = 2;
         const expectedBookmark = testBookmarks[bookmarkId - 1];
         return supertest(app)
-          .get(`/bookmarks/${bookmarkId}`)
+          .get(`/api/bookmarks/${bookmarkId}`)
           .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
           .expect(200, expectedBookmark);
       });
     });
+
+    context('Given bookmarks table has malicious data', () => {
+      const { maliciousBookmarks, expectedBookmarks } = fixtures.makeXssBookmarksArray();
+
+      beforeEach('insert malicious bookmarks', () => {
+        return db.into('bookmarks').insert(maliciousBookmarks);
+      });
+
+      it('Sanitizes malicious data when retrieving all bookmarks', () => {
+        return supertest(app)
+          .get('/api/bookmarks')
+          .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
+          .expect(200, expectedBookmarks);
+      });
+    });
   });
 
-  describe('POST /bookmarks', () => {
+  describe('POST /api/bookmarks', () => {
     const requiredFields = ['title', 'url', 'rating'];
 
     requiredFields.forEach(field => {
@@ -71,7 +86,7 @@ describe('Bookmarks Endpoints', () => {
         delete newBookmark[field];
 
         return supertest(app)
-          .post('/bookmarks')
+          .post('/api/bookmarks')
           .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
           .send(newBookmark)
           .expect(400, {
@@ -88,7 +103,7 @@ describe('Bookmarks Endpoints', () => {
         rating: 4
       };
       return supertest(app)
-        .post('/bookmarks')
+        .post('/api/bookmarks')
         .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
         .send(newBookmark)
         .expect(201)
@@ -102,10 +117,46 @@ describe('Bookmarks Endpoints', () => {
         })
         .then(postRes =>
           supertest(app)
-            .get(`/bookmarks/${postRes.body.id}`)
+            .get(`/api/bookmarks/${postRes.body.id}`)
             .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
             .expect(postRes.body)
         );
+    });
+  });
+
+  describe(`DELETE /api/articles/:article_id`, () => {
+    context('Given there are bookmarks in the database', () => {
+      const testBookmarks = fixtures.makeBookmarksArray();
+
+      beforeEach('insert bookmarks', () => {
+        return db.into('bookmarks').insert(testBookmarks);
+      });
+
+      it('responds with 204 and removes the bookmark', () => {
+        const idToRemove = 2;
+        const expectedBookmarks = testBookmarks.filter(bookmark => bookmark.id !== idToRemove);
+        return supertest(app)
+          .delete(`/api/bookmarks/${idToRemove}`)
+          .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
+          .expect(204)
+          .then(res =>
+            supertest(app)
+              .get(`/api/bookmarks`)
+              .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
+              .expect(expectedBookmarks)
+          );
+      });
+    });
+  });
+
+  describe.only(`PATCH /api/articles/:article_id`, () => {
+    context(`Given no articles`, () => {
+      it(`responds with 404`, () => {
+        const articleId = 123456;
+        return supertest(app)
+          .patch(`/api/articles/${articleId}`)
+          .expect(404, { error: { message: `Article doesn't exist` } });
+      });
     });
   });
 });
