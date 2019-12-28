@@ -1,6 +1,5 @@
 /* eslint-disable quotes */
 /* eslint-disable strict */
-const { expect } = require('chai');
 const knex = require('knex');
 const app = require('../src/app');
 const fixtures = require('./bookmarks-fixtures.js');
@@ -124,7 +123,7 @@ describe('Bookmarks Endpoints', () => {
     });
   });
 
-  describe(`DELETE /api/articles/:article_id`, () => {
+  describe(`DELETE /api/bookmarks/:bookmark_id`, () => {
     context('Given there are bookmarks in the database', () => {
       const testBookmarks = fixtures.makeBookmarksArray();
 
@@ -149,13 +148,80 @@ describe('Bookmarks Endpoints', () => {
     });
   });
 
-  describe.only(`PATCH /api/articles/:article_id`, () => {
-    context(`Given no articles`, () => {
+  describe(`PATCH /api/bookmarks/:bookmark_id`, () => {
+    context(`Given no bookmarks`, () => {
       it(`responds with 404`, () => {
-        const articleId = 123456;
+        const bookmarkId = 123;
         return supertest(app)
-          .patch(`/api/articles/${articleId}`)
-          .expect(404, { error: { message: `Article doesn't exist` } });
+          .patch(`/api/bookmarks/${bookmarkId}`)
+          .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
+          .expect(404, { errors: { message: `Bookmark does not exist` } });
+      });
+    });
+    context('Given there are bookmarks in the database', () => {
+      const testBookmarks = fixtures.makeBookmarksArray();
+
+      beforeEach('insert bookmarks', () => {
+        return db.into('bookmarks').insert(testBookmarks);
+      });
+
+      it('responds with 204 and updates the bookmark', () => {
+        const idToUpdate = 1;
+        const updateBookmark = {
+          title: 'Thinkful',
+          url: 'https://www.thinkful.com',
+          description: 'Updated bookmark description',
+          rating: 5
+        };
+
+        const expectedBookmark = { ...testBookmarks[idToUpdate - 1], ...updateBookmark };
+
+        return supertest(app)
+          .patch(`/api/bookmarks/${idToUpdate}`)
+          .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
+          .send(updateBookmark)
+          .expect(204)
+          .then(res =>
+            supertest(app)
+              .get(`/api/bookmarks/${idToUpdate}`)
+              .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
+              .expect(expectedBookmark)
+          );
+      });
+
+      it('responds with 400 when no required fields supplied', () => {
+        const idToUpdate = 1;
+
+        return supertest(app)
+          .patch(`/api/bookmarks/${idToUpdate}`)
+          .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
+          .send({ irrelevantField: 'foo' })
+          .expect(400, {
+            error: {
+              message: `Request body must content either 'title', 'url', 'descirption' or 'rating'`
+            }
+          });
+      });
+
+      it('responds with 204 when updating only a subset of the fields', () => {
+        const idToUpdate = 1;
+        const updateBookmark = {
+          description: 'Updated bookmark description'
+        };
+
+        const expectedBookmark = { ...testBookmarks[idToUpdate - 1], ...updateBookmark };
+
+        return supertest(app)
+          .patch(`/api/bookmarks/${idToUpdate}`)
+          .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
+          .send(updateBookmark)
+          .expect(204)
+          .then(res =>
+            supertest(app)
+              .get(`/api/bookmarks/${idToUpdate}`)
+              .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
+              .expect(expectedBookmark)
+          );
       });
     });
   });

@@ -75,7 +75,7 @@ bookmarksRouter
     BookmarksService.getBookmarkById(knexInstance, id)
       .then(bookmark => {
         if (!bookmark) {
-          logger.error(error);
+          logger.error(`Bookmark with id ${id} not found`);
           return res.status(404).json({ errors: { message: 'Bookmark does not exist' } });
         }
         res.bookmark = bookmark;
@@ -91,6 +91,26 @@ bookmarksRouter
     const { id } = req.params;
     BookmarksService.deleteBookmark(knexInstance, id)
       .then(() => res.status(204).end())
+      .catch(next);
+  })
+  .patch(bodyParser, (req, res, next) => {
+    const knexInstance = req.app.get('db');
+    const { id } = req.params;
+    const { title, url, description, rating } = req.body;
+    const toUpdate = { title, url, description, rating };
+
+    const numberOfValues = Object.values(toUpdate).filter(Boolean).length;
+    if (numberOfValues === 0)
+      return res.status(400).json({
+        error: {
+          message: `Request body must content either 'title', 'url', 'descirption' or 'rating'`
+        }
+      });
+
+    BookmarksService.patchBookmark(knexInstance, id, toUpdate)
+      .then(numRowsAffected => {
+        res.status(204).end();
+      })
       .catch(next);
   });
 module.exports = bookmarksRouter;
